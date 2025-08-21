@@ -90,12 +90,24 @@ export default function ChatScreen() {
       }
     };
 
+    const onDelivered = ({ messageId }: { messageId: string }) => {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, delivered: true } : m)));
+    };
+
+    const onRead = ({ messageId }: { messageId: string }) => {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, read: true, delivered: true } : m)));
+    };
+
     s.on("message:new", onNew);
     s.on("typing", onTyping);
+    s.on("message:delivered", onDelivered);
+    s.on("message:read", onRead);
 
     return () => {
       s.off("message:new", onNew);
       s.off("typing", onTyping);
+      s.off("message:delivered", onDelivered);
+      s.off("message:read", onRead);
     };
   }, [conversationId]);
 
@@ -105,23 +117,28 @@ export default function ChatScreen() {
     if (!s || !conversationId || !input.trim() || !user?.id) return;
 
     const text = input.trim();
-    s.emit("message:send", {
+    const tempId = Math.random().toString(36).slice(2);
+    const optimistic = {
+      _id: tempId,
       conversationId,
-      sender: user.id,
-      to: otherUserId,
+      sender: user.id as string,
       text,
-    });
+      createdAt: new Date().toISOString(),
+      delivered: false,
+      read: false,
+    } as unknown as Message;
+    setMessages((prev) => [...prev, optimistic]);
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        _id: Math.random().toString(36).slice(2),
-        conversationId,
-        sender: user.id,
-        text,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    s.emit(
+      "message:send",
+      { conversationId, sender: user.id, to: otherUserId, text },
+      (saved: Message) => {
+        // Replace optimistic message with saved one
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? { ...saved } : m))
+        );
+      }
+    );
 
     setInput("");
     setTyping(false);
@@ -132,8 +149,22 @@ export default function ChatScreen() {
     setInput(t);
     const s = getSocket();
     if (!s || !otherUserId || !conversationId) return;
-    s.emit("typing", { to: otherUserId, conversationId, typing: !!t });
+    s.emit(t ? "typing:start" : "typing:stop", {
+      to: otherUserId,
+      from: user?.id,
+      conversationId,
+    });
   };
+
+  // Mark visible incoming messages as read when they arrive
+  useEffect(() => {
+    const s = getSocket();
+    if (!s || !user?.id) return;
+    const unreadIncoming = messages.filter(
+      (m) => (typeof m.sender === "string" ? m.sender : m.sender._id) !== user.id && !m.read
+    );
+    unreadIncoming.forEach((m) => s.emit("message:read", { messageId: m._id }));
+  }, [messages.length]);
 
   // Format time
   const formatTime = (iso: string) => {
@@ -155,7 +186,14 @@ export default function ChatScreen() {
         ]}
       >
         <Text style={{ color: "#111" }}>{item.text}</Text>
-        <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-end" }}>
+          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+          {mine && (
+            <Text style={[styles.tick, item.read ? styles.read : item.delivered ? styles.delivered : styles.sent]}>
+              {item.read ? "✓✓" : item.delivered ? "✓✓" : "✓"}
+            </Text>
+          )}
+        </View>
       </View>
     );
   };
@@ -274,6 +312,13 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     marginTop: 4,
   },
+  tick: {
+    marginLeft: 6,
+    fontSize: 12,
+  },
+  sent: { color: "#777" },
+  delivered: { color: "#777" },
+  read: { color: "#34b7f1" },
 
   typingText: {
     textAlign: "center",

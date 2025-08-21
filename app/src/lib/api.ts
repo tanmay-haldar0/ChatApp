@@ -2,15 +2,14 @@ import axios from "axios";
 import Constants from "expo-constants";
 
 function resolveBaseUrl(): string {
-  const envUrl = (process.env.EXPO_PUBLIC_API_URL as string) || "";
-  if (envUrl) return envUrl.replace(/\/$/, "");
+  // const envUrl = (process.env.EXPO_PUBLIC_API_URL as string) || "";
+  // if (envUrl) return envUrl.replace(/\/$/, "");
 
   // Heuristics for emulator/dev
   // Android emulator uses 10.0.2.2 to reach localhost
-  const isAndroid = Constants.platform?.android !== undefined;
-  const defaultPort = 5000;
-  const host = isAndroid ? "10.0.2.2" : "localhost";
-  return `http://${host}:${defaultPort}`;
+ 
+  const host = `https://chatapp-4m53.onrender.com`;
+  return host;
 }
 
 export const API_BASE_URL = resolveBaseUrl();

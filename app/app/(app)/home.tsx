@@ -110,6 +110,7 @@ export default function HomeScreen() {
                   const other = (c.participants as any[]).find(
                     (p) => (p._id || p) !== user?.id
                   );
+                  const otherId = typeof other === "string" ? other : other?._id;
                   const otherName =
                     typeof other === "string" ? other : other?.username;
 
@@ -120,7 +121,7 @@ export default function HomeScreen() {
                       onPress={() =>
                         router.push({
                           pathname: "/(app)/chat",
-                          params: { conversationId: c._id, username: otherName },
+                          params: { conversationId: c._id, userId: otherId, username: otherName },
                         })
                       }
                     >
